@@ -30,9 +30,11 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 pc_id: pc.pc_id,
-                candidate: candidate.candidate,
-                sdp_mid: candidate.sdpMid,
-                sdp_mline_index: candidate.sdpMLineIndex
+                candidates:[{
+                    candidate: candidate.candidate,
+                    sdp_mid: candidate.sdpMid,
+                    sdp_mline_index: candidate.sdpMLineIndex
+                }]
               })
             });
         };
