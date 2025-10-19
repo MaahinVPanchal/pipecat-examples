@@ -1,10 +1,16 @@
-# Voice Agent
+# YC AI Accelerator Registration Platform
 
-A Pipecat example demonstrating the simplest way to create a voice agent using `SmallWebRTCTransport`.
+A sophisticated Y Combinator AI accelerator registration system combining voice AI, video avatars, and real-time conversations using Pipecat, Gemini Live API, and Tavus.
 
 ## 🚀 Quick Start
 
-### 1️⃣ Start the Bot Server
+### 1️⃣ Clone the Repository
+```bash
+git clone https://github.com/MaahinVPanchal/pipecat-examples.git
+cd pipecat-examples/p2p-webrtc/voice-agent
+```
+
+### 2️⃣ Backend Setup (Python Voice Agent)
 
 #### 🔧 Set Up the Environment
 1. Create and activate a virtual environment:
@@ -23,26 +29,66 @@ A Pipecat example demonstrating the simplest way to create a voice agent using `
    ```bash
    cp env.example .env
    ```
-   - Add your API keys
+   - Add your API keys:
+     - `GOOGLE_API_KEY` (Gemini Live API)
+     - `TAVUS_API_KEY` (Tavus AI Avatar)
+     - `TAVUS_REPLICA_ID` (Your Tavus replica)
+     - `TAVUS_PERSONA_ID` (Optional)
 
-#### ▶️ Run the Server
+#### ▶️ Run the Backend Server
 ```bash
 python server.py
 ```
+Backend will be available at: `http://localhost:7860`
 
-### 2️⃣ Connect Using the Client App
+### 3️⃣ Frontend Setup (Next.js Registration Interface)
 
-Open your browser and visit:
+#### 🔧 Navigate to Frontend Directory
+```bash
+cd v0-startup-accelerator-registration
 ```
-http://localhost:7860
+
+#### 📦 Install Dependencies
+```bash
+npm install
 ```
+
+#### ▶️ Run the Frontend
+```bash
+npm run dev
+```
+Frontend will be available at: `http://localhost:3000`
+
+### 4️⃣ Access the Application
+
+- **Founder Registration**: `http://localhost:3000`
+- **Admin Dashboard**: `http://localhost:3000/admin`
+- **Voice Agent Test**: `http://localhost:7860`
 
 ## 📌 Requirements
 
 - Python **3.10+**
-- Node.js **16+** (for JavaScript components)
-- Google API Key
+- Node.js **18+** (for Next.js frontend)
+- **API Keys Required:**
+  - Google Gemini API Key (for voice conversations)
+  - Tavus API Key (for AI video avatars)
+  - Tavus Replica ID (your AI avatar)
 - Modern web browser with WebRTC support
+
+## 🏗️ Architecture
+
+This project combines two main components:
+
+### Backend (Python + Pipecat)
+- **FastAPI Server** (`server.py`) - WebRTC endpoints and API routes
+- **Voice Agent** (`bot.py`) - AI conversation logic using Pipecat framework
+- **Integrations**: Gemini Live API, Tavus API, WebRTC
+
+### Frontend (Next.js + React)
+- **Registration Interface** - Multi-step YC application form
+- **Voice Assistant** - Real-time voice conversations with AI
+- **Admin Dashboard** - Review applications and conduct AI video interviews
+- **AI Pitch Coach** - Text-based conversation for pitch improvement
 
 ---
 
@@ -86,9 +132,48 @@ If you're running your own TURN server, make sure to include your server URL, us
 
 ---
 
-### 💡 Notes
-- Ensure all dependencies are installed before running the server.
-- Check the `.env` file for missing configurations.
-- WebRTC requires a secure environment (HTTPS) for full functionality in production.
+## 🎯 Features
+
+### For Founders
+- **Voice-First Registration** - Complete YC application through natural conversation
+- **AI Pitch Coach** - Get feedback on your startup pitch
+- **Real-Time Voice Assistant** - Speak naturally about your startup
+- **Progress Tracking** - Visual completion status of your application
+
+### For Admins/Reviewers
+- **AI Video Interviews** - Conduct mock YC interviews with Tavus AI avatars
+- **Company Context** - AI knows full company details during conversations
+- **Application Management** - Review, approve, and track all submissions
+- **PDF Generation** - Export company profiles for review
+
+## 🔧 Environment Variables
+
+Create a `.env` file in the root directory:
+
+```env
+# Google Gemini Live API
+GOOGLE_API_KEY=your_google_api_key_here
+
+# Tavus AI Avatar API
+TAVUS_API_KEY=your_tavus_api_key_here
+TAVUS_REPLICA_ID=your_replica_id_here
+TAVUS_PERSONA_ID=your_persona_id_here (optional)
+
+# Frontend API URL (for production)
+NEXT_PUBLIC_API_URL=http://localhost:7860
+```
+
+## 💡 Usage Tips
+
+1. **Start Backend First** - Always run `python server.py` before starting the frontend
+2. **Voice Permissions** - Grant microphone permissions when prompted
+3. **WebRTC Requirements** - Use modern browsers (Chrome, Firefox, Safari)
+4. **Local Development** - Both services run locally for development
+
+## 🚀 Deployment
+
+- **Backend**: Deploy Python FastAPI server to any cloud provider
+- **Frontend**: Deploy Next.js app to Vercel (already configured)
+- **Environment**: Ensure all API keys are properly configured
 
 Happy coding! 🎉
