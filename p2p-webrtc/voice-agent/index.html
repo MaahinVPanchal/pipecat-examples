@@ -1,28 +1,504 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Voice Agent</title>
+    <title>Neural Voice Interface</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-        #status { font-size: 20px; margin: 20px; }
-        button { padding: 10px 20px; font-size: 16px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .container {
+            position: relative;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .neural-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            opacity: 0.1;
+        }
+
+        .title {
+            font-size: clamp(2rem, 5vw, 4rem);
+            font-weight: 700;
+            color: white;
+            margin-bottom: 2rem;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            letter-spacing: -0.02em;
+        }
+
+        .voice-interface {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto 3rem;
+        }
+
+        .voice-circle {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .voice-circle:hover {
+            transform: scale(1.05);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .voice-circle.active {
+            animation: pulse 2s infinite;
+            background: rgba(76, 175, 80, 0.2);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+
+        .voice-circle.connecting {
+            animation: spin 1s linear infinite;
+            background: rgba(255, 193, 7, 0.2);
+            border-color: rgba(255, 193, 7, 0.5);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .voice-icon {
+            font-size: 4rem;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .status-display {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 50px;
+            padding: 1rem 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-text {
+            font-size: 1.2rem;
+            color: white;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+            min-width: 120px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn.primary {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            border-color: #4CAF50;
+        }
+
+        .btn.danger {
+            background: linear-gradient(45deg, #f44336, #d32f2f);
+            border-color: #f44336;
+        }
+
+        .audio-visualizer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            display: none;
+        }
+
+        .audio-visualizer.active {
+            display: block;
+            animation: visualize 0.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes visualize {
+            0% {
+                box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+            }
+
+            100% {
+                box-shadow: 0 0 40px rgba(76, 175, 80, 0.6);
+            }
+        }
+
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: float 6s infinite linear;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            90% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes avatarPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+
+        .info-panel {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 1rem 2rem;
+            color: white;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .video-container {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(20px);
+            border-radius: 25px;
+            padding: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .video-container:hover {
+            transform: scale(1.02);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+
+        .video-container video {
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .voice-interface {
+                width: 250px;
+                height: 250px;
+            }
+
+            .title {
+                font-size: 2rem;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .video-container {
+                position: fixed !important;
+                top: 10px !important;
+                right: 10px !important;
+                width: 200px;
+            }
+
+            .video-container video {
+                width: 180px !important;
+                height: 120px !important;
+            }
+        }
     </style>
 </head>
+
 <body>
-    <h1>WebRTC Voice Agent</h1>
-    <p id="status">Disconnected</p>
-    <button id="connect-btn">Connect</button>
+    <div class="particles" id="particles"></div>
+
+    <div class="container">
+        <h1 class="title">Neural Voice Interface</h1>
+
+        <div class="voice-interface">
+            <div class="voice-circle" id="voice-circle">
+                <div class="voice-icon" id="voice-icon">🎤</div>
+                <div class="audio-visualizer" id="visualizer"></div>
+            </div>
+        </div>
+
+        <div class="status-display">
+            <div class="status-text" id="status">Disconnected</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn primary" id="connect-btn">Connect to Tavus Avatar</button>
+            <button class="btn" id="test-avatar-btn" style="display: none;">Test Avatar</button>
+            <button class="btn" id="load-tavus-btn">Load Tavus Video</button>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        Tavus AI Avatar • Neural Voice Interface • Real-time AI Communication
+    </div>
+
+    <!-- Video container for Tavus avatar -->
+    <div class="video-container" id="video-container"
+        style="display: none; position: fixed; top: 20px; right: 20px; z-index: 100;">
+        <video id="video-el" autoplay muted
+            style="width: 300px; height: 200px; border-radius: 20px; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px);"></video>
+    </div>
+
     <audio id="audio-el" autoplay></audio>
 
     <script>
         const statusEl = document.getElementById("status")
         const buttonEl = document.getElementById("connect-btn")
         const audioEl = document.getElementById("audio-el")
+        const videoEl = document.getElementById("video-el")
+        const videoContainer = document.getElementById("video-container")
+        const voiceCircle = document.getElementById("voice-circle")
+        const voiceIcon = document.getElementById("voice-icon")
+        const visualizer = document.getElementById("visualizer")
+        const particlesContainer = document.getElementById("particles")
 
         let connected = false
         let peerConnection = null
+        let tavusStatus = null
+
+        // Create floating particles
+        function createParticles() {
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div')
+                particle.className = 'particle'
+                particle.style.left = Math.random() * 100 + '%'
+                particle.style.animationDelay = Math.random() * 6 + 's'
+                particle.style.animationDuration = (Math.random() * 3 + 3) + 's'
+                particlesContainer.appendChild(particle)
+            }
+        }
+
+        // Initialize particles
+        createParticles()
+
+        // Check Tavus status on load
+        async function checkTavusStatus() {
+            try {
+                const response = await fetch('/api/tavus/status')
+                tavusStatus = await response.json()
+                console.log('Tavus status:', tavusStatus)
+
+                if (tavusStatus.status === 'configured') {
+                    // Update UI to show Tavus is ready
+                    const infoPanel = document.querySelector('.info-panel')
+                    infoPanel.innerHTML = `Tavus AI Avatar Ready • Replica: ${tavusStatus.replica_id.substring(0, 8)}... • Neural Voice Interface`
+                }
+            } catch (error) {
+                console.error('Failed to check Tavus status:', error)
+            }
+        }
+
+        // Function to show Tavus avatar placeholder or video
+        async function showTavusAvatar() {
+            console.log('showTavusAvatar called, tavusStatus:', tavusStatus)
+
+            try {
+                // Use the specific Tavus conversation URL
+                const conversationUrl = 'https://tavus.daily.co/c1ceaa9417df9413'
+                console.log('🎬 Loading specific Tavus conversation:', conversationUrl)
+                
+                // Create iframe for actual Tavus video
+                const iframe = document.createElement('iframe')
+                iframe.src = conversationUrl
+                iframe.style.cssText = `
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                    border-radius: 15px;
+                    background: #000;
+                `
+                iframe.allow = 'camera; microphone; autoplay; display-capture'
+                
+                // Add loading indicator
+                iframe.onload = () => {
+                    console.log('✅ Tavus iframe loaded successfully')
+                }
+                
+                iframe.onerror = (error) => {
+                    console.error('❌ Tavus iframe failed to load:', error)
+                }
+                
+                // Clear existing content and add iframe
+                videoContainer.innerHTML = ''
+                videoContainer.appendChild(iframe)
+                videoContainer.style.display = 'block'
+                
+                console.log('🚀 Tavus iframe setup complete')
+                return
+            } catch (error) {
+                console.error('💥 Failed to load Tavus iframe:', error)
+            }
+
+            // Fallback: Show animated placeholder
+            console.log('Showing Tavus placeholder avatar')
+
+            const avatarContainer = document.createElement('div')
+            avatarContainer.style.cssText = `
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 15px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                text-align: center;
+                position: relative;
+                overflow: hidden;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            `
+
+            // Get replica ID for display
+            const replicaDisplay = tavusStatus?.replica_id?.substring(0, 8) || 'rca8a38779a8'.substring(0, 8)
+
+            // Add animated avatar representation
+            avatarContainer.innerHTML = `
+                <div style="font-size: 4rem; margin-bottom: 1rem; animation: avatarPulse 2s infinite;">🤖</div>
+                <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Tavus AI Avatar</div>
+                <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 1rem;">Voice-Only Mode</div>
+                <div style="position: absolute; bottom: 15px; left: 15px; font-size: 0.7rem; opacity: 0.7; background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 10px;">
+                    ID: ${replicaDisplay}
+                </div>
+                <div style="position: absolute; top: 15px; right: 15px; width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; animation: avatarPulse 1s infinite;"></div>
+            `
+
+            // Clear existing content and add avatar
+            videoContainer.innerHTML = ''
+            videoContainer.appendChild(avatarContainer)
+            videoContainer.style.display = 'block'
+
+            console.log('Tavus placeholder avatar loaded successfully')
+        }
+
+        // Initialize Tavus status check
+        checkTavusStatus()
+
+        // Add test button for debugging
+        const testAvatarBtn = document.getElementById('test-avatar-btn')
+        testAvatarBtn.addEventListener('click', () => {
+            console.log('Test avatar button clicked')
+            showTavusAvatar()
+        })
+
+        // Add direct Tavus load button
+        const loadTavusBtn = document.getElementById('load-tavus-btn')
+        loadTavusBtn.addEventListener('click', () => {
+            console.log('Load Tavus button clicked')
+            showTavusAvatar()
+        })
+
+        // Show test button in development
+        if (window.location.hostname === 'localhost') {
+            testAvatarBtn.style.display = 'inline-block'
+        }
 
         const waitForIceGatheringComplete = async (pc, timeoutMs = 2000) => {
             if (pc.iceGatheringState === 'complete') return;
@@ -55,11 +531,30 @@
 
         const createSmallWebRTCConnection = async (audioTrack) => {
             const config = {
-              iceServers: [],
+                iceServers: [],
             };
             const pc = new RTCPeerConnection(config)
             addPeerConnectionEventListeners(pc)
-            pc.ontrack = e => audioEl.srcObject = e.streams[0]
+            pc.ontrack = e => {
+                console.log('🎥 Received track:', e.track.kind, 'Stream:', e.streams[0])
+                if (e.track.kind === 'audio') {
+                    audioEl.srcObject = e.streams[0]
+                    console.log('🔊 Audio track connected')
+                } else if (e.track.kind === 'video') {
+                    console.log('📹 Video track received! Setting up video element...')
+                    videoEl.srcObject = e.streams[0]
+                    videoEl.style.display = 'block'
+                    videoContainer.style.display = 'block'
+
+                    // Clear any placeholder content
+                    const existingContent = videoContainer.querySelector('div')
+                    if (existingContent) {
+                        existingContent.remove()
+                    }
+
+                    console.log('✅ Video track connected and displayed')
+                }
+            }
             // SmallWebRTCTransport expects to receive both transceivers
             pc.addTransceiver(audioTrack, { direction: 'sendrecv' })
             pc.addTransceiver('video', { direction: 'sendrecv' })
@@ -67,7 +562,7 @@
             await waitForIceGatheringComplete(pc)
             const offer = pc.localDescription
             const response = await fetch('/api/offer', {
-                body: JSON.stringify({ sdp: offer.sdp, type: offer.type}),
+                body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
                 headers: { 'Content-Type': 'application/json' },
                 method: 'POST',
             });
@@ -78,8 +573,8 @@
 
         const connect = async () => {
             _onConnecting()
-            const audioStream = await navigator.mediaDevices.getUserMedia({audio: true})
-            peerConnection= await createSmallWebRTCConnection(audioStream.getAudioTracks()[0])
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            peerConnection = await createSmallWebRTCConnection(audioStream.getAudioTracks()[0])
         }
 
         const addPeerConnectionEventListeners = (pc) => {
@@ -107,19 +602,50 @@
         const _onConnecting = () => {
             statusEl.textContent = "Connecting"
             buttonEl.textContent = "Disconnect"
+            buttonEl.className = "btn danger"
+            voiceCircle.className = "voice-circle connecting"
+            voiceIcon.textContent = "⚡"
             connected = true
         }
 
-        const _onConnected = () => {
-            statusEl.textContent = "Connected"
+        const _onConnected = async () => {
+            console.log('_onConnected called')
+            statusEl.textContent = "Tavus Avatar Connected"
             buttonEl.textContent = "Disconnect"
+            buttonEl.className = "btn danger"
+            voiceCircle.className = "voice-circle active"
+            voiceIcon.textContent = "🤖"
+            visualizer.className = "audio-visualizer active"
             connected = true
+
+            // Add some visual feedback
+            document.body.style.background = "linear-gradient(135deg, #4CAF50 0%, #45a049 100%)"
+
+            // Show Tavus avatar representation immediately and also after delay
+            showTavusAvatar()
+
+            // Also try after a delay in case the first one doesn't work
+            setTimeout(async () => {
+                console.log('Delayed avatar load attempt')
+                await showTavusAvatar()
+            }, 1000)
         }
 
         const _onDisconnected = () => {
             statusEl.textContent = "Disconnected"
-            buttonEl.textContent = "Connect"
+            buttonEl.textContent = "Connect to Tavus Avatar"
+            buttonEl.className = "btn primary"
+            voiceCircle.className = "voice-circle"
+            voiceIcon.textContent = "🎤"
+            visualizer.className = "audio-visualizer"
             connected = false
+
+            // Hide video container
+            videoContainer.style.display = 'none'
+            videoEl.srcObject = null
+
+            // Reset background
+            document.body.style.background = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
         }
 
         const disconnect = () => {
@@ -138,6 +664,29 @@
                 disconnect()
             }
         });
+
+        // Add click handler to voice circle
+        voiceCircle.addEventListener("click", async () => {
+            if (!connected) {
+                await connect()
+            } else {
+                disconnect()
+            }
+        });
+
+        // Add some interactive effects
+        voiceCircle.addEventListener("mouseenter", () => {
+            if (!connected) {
+                voiceIcon.textContent = "🎙️"
+            }
+        });
+
+        voiceCircle.addEventListener("mouseleave", () => {
+            if (!connected) {
+                voiceIcon.textContent = "🎤"
+            }
+        });
     </script>
 </body>
+
 </html>
