@@ -12,10 +12,11 @@ from contextlib import asynccontextmanager
 from typing import Dict
 
 import uvicorn
-from bot import run_bot, TavusIntegration
+from bot import run_bot, run_founder_bot, run_admin_tavus_bot, TavusIntegration
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pipecat.transports.smallwebrtc.connection import IceServer, SmallWebRTCConnection
 
@@ -23,6 +24,15 @@ from pipecat.transports.smallwebrtc.connection import IceServer, SmallWebRTCConn
 load_dotenv(override=True)
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:7860"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # Store connections by pc_id
 pcs_map: Dict[str, SmallWebRTCConnection] = {}
@@ -109,6 +119,109 @@ async def serve_index():
     return FileResponse("index.html")
 
 
+@app.get("/api/test-cors")
+async def test_cors():
+    """Test endpoint to verify CORS is working"""
+    return JSONResponse({
+        "message": "CORS is working!",
+        "timestamp": "2025-01-19",
+        "status": "success"
+    })
+
+
+@app.get("/register")
+async def serve_registration():
+    """Serve the startup registration interface"""
+    return FileResponse("register.html")
+
+
+@app.post("/api/register-founder")
+async def register_founder(request: dict, background_tasks: BackgroundTasks):
+    """Create Gemini Realtime connection for founder registration"""
+    pc_id = request.get("pc_id")
+    founder_data = request.get("founder_data", {})
+
+    if pc_id and pc_id in pcs_map:
+        pipecat_connection = pcs_map[pc_id]
+        logger.info(f"Reusing existing connection for founder registration: {pc_id}")
+        await pipecat_connection.renegotiate(sdp=request["sdp"], type=request["type"])
+    else:
+        pipecat_connection = SmallWebRTCConnection(ice_servers)
+        await pipecat_connection.initialize(sdp=request["sdp"], type=request["type"])
+
+        @pipecat_connection.event_handler("closed")
+        async def handle_disconnected(webrtc_connection: SmallWebRTCConnection):
+            logger.info(f"Discarding founder connection: {webrtc_connection.pc_id}")
+            pcs_map.pop(webrtc_connection.pc_id, None)
+
+        # Create founder-specific bot with registration context
+        background_tasks.add_task(run_founder_bot, pipecat_connection, founder_data)
+
+    answer = pipecat_connection.get_answer()
+    pc_id = answer["pc_id"]
+    
+    # Store the connection
+    pcs_map[pc_id] = pipecat_connection
+
+    return answer
+
+
+@app.options("/api/admin-tavus")
+async def admin_tavus_options():
+    """Handle OPTIONS request for admin-tavus endpoint"""
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "http://localhost:3000",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+
+@app.post("/api/admin-tavus")
+async def create_admin_tavus_conversation(request: dict, background_tasks: BackgroundTasks):
+    """Create Tavus conversation for admin with company PDF context"""
+    company_data = request.get("company_data", {})
+    pc_id = request.get("pc_id")
+
+    if pc_id and pc_id in pcs_map:
+        pipecat_connection = pcs_map[pc_id]
+        logger.info(f"Reusing existing connection for admin Tavus: {pc_id}")
+        await pipecat_connection.renegotiate(sdp=request["sdp"], type=request["type"])
+    else:
+        pipecat_connection = SmallWebRTCConnection(ice_servers)
+        await pipecat_connection.initialize(sdp=request["sdp"], type=request["type"])
+
+        @pipecat_connection.event_handler("closed")
+        async def handle_disconnected(webrtc_connection: SmallWebRTCConnection):
+            logger.info(f"Discarding admin Tavus connection: {webrtc_connection.pc_id}")
+            pcs_map.pop(webrtc_connection.pc_id, None)
+            if webrtc_connection.pc_id in tavus_integrations:
+                tavus = tavus_integrations[webrtc_connection.pc_id]
+                await tavus.end_conversation()
+                del tavus_integrations[webrtc_connection.pc_id]
+
+        # Create admin Tavus bot with company context
+        background_tasks.add_task(run_admin_tavus_bot, pipecat_connection, company_data)
+
+    answer = pipecat_connection.get_answer()
+    pc_id = answer["pc_id"]
+    
+    # Store the connection
+    pcs_map[pc_id] = pipecat_connection
+
+    # Return with explicit CORS headers
+    return JSONResponse(
+        content=answer,
+        headers={
+            "Access-Control-Allow-Origin": "http://localhost:3000",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+
 @app.get("/tavus")
 async def serve_tavus_direct():
     return FileResponse("tavus-direct.html")
@@ -156,9 +269,46 @@ async def debug_tavus_status():
     })
 
 
+@app.post("/api/create-tavus-conversation")
+async def create_tavus_conversation(request: dict):
+    """Create a new Tavus conversation with company context and return the URL"""
+    company_data = request.get("company_data", {})
+    company_name = company_data.get('companyName', 'Unknown Company')
+    
+    logger.info(f"🎬 Creating Tavus conversation for: {company_name}")
+    logger.info(f"📊 Using replica: {os.getenv('TAVUS_REPLICA_ID')}")
+    
+    tavus = TavusIntegration(
+        api_key=os.getenv("TAVUS_API_KEY"),
+        replica_id=os.getenv("TAVUS_REPLICA_ID"),
+        persona_id=os.getenv("TAVUS_PERSONA_ID")
+    )
+    
+    # Set company context for the conversation
+    tavus.company_context = company_data
+    
+    conversation_data = await tavus.create_conversation()
+    if conversation_data:
+        # Store for later access
+        global latest_tavus_conversation
+        latest_tavus_conversation = conversation_data
+        
+        conversation_id = conversation_data.get('conversation_id')
+        conversation_url = conversation_data.get('conversation_url')
+        
+        logger.info(f"✅ Created Tavus conversation for {company_name}")
+        logger.info(f"🆔 Conversation ID: {conversation_id}")
+        logger.info(f"🔗 Conversation URL: {conversation_url}")
+        
+        return JSONResponse(conversation_data)
+    else:
+        logger.error(f"❌ Failed to create Tavus conversation for {company_name}")
+        raise HTTPException(status_code=500, detail="Failed to create Tavus conversation")
+
+
 @app.post("/api/tavus/create-conversation")
-async def create_tavus_conversation():
-    """Create a new Tavus conversation and return the URL"""
+async def create_tavus_conversation_legacy():
+    """Legacy endpoint - Create a new Tavus conversation and return the URL"""
     tavus = TavusIntegration(
         api_key=os.getenv("TAVUS_API_KEY"),
         replica_id=os.getenv("TAVUS_REPLICA_ID"),
@@ -170,7 +320,7 @@ async def create_tavus_conversation():
         # Store for later access
         global latest_tavus_conversation
         latest_tavus_conversation = conversation_data
-        logger.info(f"Created Tavus conversation via API: {conversation_data.get('conversation_id')}")
+        logger.info(f"Created Tavus conversation via legacy API: {conversation_data.get('conversation_id')}")
         return JSONResponse(conversation_data)
     else:
         raise HTTPException(status_code=500, detail="Failed to create Tavus conversation")

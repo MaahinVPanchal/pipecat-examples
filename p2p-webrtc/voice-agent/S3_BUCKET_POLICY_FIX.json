@@ -1,0 +1,34 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::717279715087:user/YCuser"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::yc-startup"
+    },
+    {
+      "Sid": "AllowUserUploadAndManage",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::717279715087:user/YCuser"
+      },
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::yc-startup/*"
+    },
+    {
+      "Sid": "AllowPublicReadAccess",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::yc-startup/submissions/*"
+    }
+  ]
+}
